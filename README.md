@@ -9,9 +9,11 @@
 
 ## セットアップ
 
-[uv](https://docs.astral.sh/uv/) を使います（Python 3.14 以上）。
+[uv](https://docs.astral.sh/uv/) を使います（Python 3.14 以上）。まずリポジトリを取得し、そのディレクトリで依存をインストールします。
 
 ```sh
+git clone https://github.com/terasakisatoshi/sarashina-arxiv-rag.git
+cd sarashina-arxiv-rag
 uv sync
 ```
 
@@ -19,10 +21,13 @@ API キーを取得し、プロジェクト直下の `.env` に設定します�
 
 ```sh
 # https://chat.sarashina.ai/dashboard/api-keys で発行
-echo 'SARASHINA_API_KEY=your_api_key_here' > .env
+# 初回のみ。すでに .env がある場合は上書きせず、エディタで編集してください。
+[ -f .env ] || echo 'SARASHINA_API_KEY=your_api_key_here' > .env
 ```
 
 `.env` は `.gitignore` 済みです。`--api-key` を指定すれば環境変数より優先されます。
+
+> **注意:** `.env` はプロジェクト直下に置き、CLI も同じディレクトリから実行してください（読み込みはカレントディレクトリ基準です）。既存の `.env` を `> .env` で上書きすると、設定済みの API キーが失われます。
 
 ## 使い方
 
@@ -34,16 +39,17 @@ uv run chat -m sarashina3-nano "この文を要約して: ..."
 uv run chat -s "あなたは関西弁で話します" "今日の天気は？"
 ```
 
-主なオプション: `-m/--model`（既定 `sarashina3-mini`）、`-s/--system`、`-t/--temperature`、`--no-stream`、`--api-key`。応答は既定でストリーミング表示されます。
+主なオプション: `-m/--model`（既定 `sarashina3-mini`）、`-s/--system`、`-t/--temperature`、`--no-stream`、`--api-key`。応答は既定でストリーミング表示され、返答本文が標準出力に出力されます。`-t/--temperature` を指定しない場合はリクエストに含めず API 既定値に任せます。
 
 ### translate
 
 ```sh
 uv run translate "SB Intuitions について教えて下さい" --to en
 uv run translate "I'll give it a shot, no cap." --to ja
+uv run translate "今日はいい天気ですね" --from ja   # → en
 ```
 
-`--from` / `--to` は `ja` か `en`（片方だけ指定すればもう片方は逆言語、省略時は `ja → en`）。翻訳は `sarashina3-translate` が使われます。
+`--from` / `--to` は `ja` か `en`（片方だけ指定すればもう片方は逆言語、省略時は `ja → en`）。両方指定した場合はその組み合わせをそのまま使います。翻訳は `sarashina3-translate` が使われ、`--api-key` で API キーを上書きできます。訳文は標準出力に表示されます。
 
 ### pdftranslate
 
@@ -54,8 +60,9 @@ uv run pdftranslate https://arxiv.org/abs/1706.03762 --pages 1-3 -o attention.md
 
 - 入力はローカルパスまたは `http(s)` URL。arXiv の `abs` URL は内部で `pdf` URL に変換されます。
 - 既定は `en → ja`。対訳（原文 / 訳文）の Markdown を出力します。
+- 出力先は `-o/--output` で指定（省略時は入力のファイル名を `.md` にしたもの。例: `paper.pdf` → `paper.md`）。
 - `--pages 1-3` でページ範囲を限定（超長編は必須級に遅いため推奨）。
-- `--html` で HTML、`--pdf` で翻訳のみの PDF も生成します。
+- `--html` で HTML、`--pdf` で翻訳のみの PDF も生成します。ファイル名は出力 Markdown の拡張子を `.html` / `.pdf` に置き換えたもの（例: `-o paper.md` なら `paper.html` / `paper.pdf`）。
 
 ### sarashina-web（arXiv RAG 解説ボット）
 
@@ -84,9 +91,19 @@ http://127.0.0.1:8000 を開きます。
 | メソッド | パス | 説明 |
 | --- | --- | --- |
 | POST | `/api/index` | URL から抽出＋埋め込み（RAG構築）を開始し `job_id` を返す |
-| GET | `/api/index/{job_id}` | 進捗（`status` / `phase` / `indexed` / `done` / `total` / `embed_done` / `embed_total`）を返す |
-| GET | `/api/paper/{job_id}` | 抽出した原文の HTML を返す |
+| GET | `/api/index/{job_id}` | 進捗（`status` / `phase` / `indexed` / `done` / `total` / `embed_done` / `embed_total` など）を返す |
+| GET | `/api/paper/{job_id}` | 抽出した原文チャンクと既訳を JSON で返す |
+| POST | `/api/translate` | 指定チャンクを ja に翻訳（既訳はキャッシュから返す） |
 | POST | `/api/chat` | RAG 文脈つきで SSE ストリーミング回答（要インデックス構築） |
+| POST | `/api/suggest` | 直近の会話から次の質問候補を 3 件提案 |
+
+リクエスト / レスポンスの形:
+
+- `POST /api/index` — リクエスト `{"url": "https://arxiv.org/abs/1706.03762", "pages": "1-3"}`（`pages` は省略可）。レスポンス `{"job_id": "..."}`。`GET /api/index/{job_id}` をポーリングし、`status` は `running` → `done`（失敗時 `error`）、`phase` は `extracting` → `embedding` → `done`。
+- `GET /api/paper/{job_id}` — レスポンス `{"title", "chunks": [{"i", "page", "text"}], "translations": {"<i>": "訳文"}}`（**JSON**。HTML ではありません）。
+- `POST /api/translate` — リクエスト `{"job_id", "index"}`。レスポンス `{"index", "text"}`。
+- `POST /api/chat` — リクエスト `{"job_id", "message"}`。レスポンスは SSE: `data: {"delta": "..."}` を繰り返し、末尾に `data: {"note": "参考ページ: ..."}` と `data: [DONE]`。エラー時は `data: {"error": "..."}`。
+- `POST /api/suggest` — リクエスト `{"job_id"}`。レスポンス `{"suggestions": ["...", "...", "..."]}`。
 
 ## テスト
 

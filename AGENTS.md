@@ -16,7 +16,7 @@ uv run uvicorn sarashina_client.webapp:app --reload   # dev server
 ```
 
 - **Tests: `uv run pytest`** (`tests/`, pytest + httpx dev deps). They are fully offline: HTTP is monkeypatched, no API key is needed, and the cache is redirected to a tmp dir. CI (`.github/workflows/test.yml`) runs this on push to `main` and on PRs. There is still **no linter and no typechecker** — do not invent `ruff`/`mypy` commands.
-- `.env` lives at the **project root** and is loaded cwd-relative (`load_dotenv(".env")` in each `main`). It holds a real `SARASHINA_API_KEY`, is gitignored, and must **never be overwritten/truncated** (a previous `> .env` destroyed the user's key).
+- `.env` lives at the **project root** and is loaded cwd-relative (`load_dotenv(".env")` in `cli`/`translate`/`pdftranslate` `main`, and in `webapp.get_api_key`). It holds a real `SARASHINA_API_KEY`, is gitignored, and must **never be overwritten/truncated** (a previous `> .env` destroyed the user's key).
 
 ## Conventions / gotchas
 
@@ -25,7 +25,7 @@ uv run uvicorn sarashina_client.webapp:app --reload   # dev server
 - Embedding API takes **one text per request** and requires `task_type` (`RETRIEVAL_DOCUMENT` for the index, `RETRIEVAL_QUERY` for queries). Batching/parallelism lives in `rag.Embedder` (`RateLimiter` 55/min + 4 worker threads).
 - `pdftranslate.normalize_url` rewrites arXiv `abs` → `pdf`; it is used by `download_pdf` **and** by cache keys (import it, don't re-roll arXiv parsing).
 - RAG flow (`webapp.py` + `rag.py`): user asks in Japanese → JA→EN translate → `RETRIEVAL_QUERY` embed → cosine top-20 → `sarashina3-rerank` top-5 → `sarashina3-mini` answers in Japanese over SSE. Chunks are the **original English** text; only the query is translated.
-- Caching (`cache.py`, dir `~/.cache/sarashina-client` or `$SARASHINA_CACHE_DIR`) has two layers: a per-range index cache (`<doc>__pages-<range>.json.gz`) and a per-document chunk→vector store (`<doc>__embeddings.json.gz`, keyed by chunk-text SHA1). Rebuilding a wider page range reuses cached chunk embeddings and only embeds the missing ones.
+- Caching (`cache.py`, dir `~/.cache/sarashina-client` or `$SARASHINA_CACHE_DIR`) has three layers: a per-range index cache (`<doc>__pages-<range>.json.gz`, keyed by normalized URL + page range, `all` when unset), a per-document chunk→vector store (`<doc>__embeddings.json.gz`, keyed by chunk-text SHA1), and a per-document chunk→translation store (`<doc>__translations.json.gz`, same SHA1 key). Rebuilding a wider page range reuses cached chunk embeddings and only embeds the missing ones; translations are reused across page ranges too.
 - `webapp.JOBS` is an in-process dict: index jobs are lost on restart (disk cache survives). Only one in-memory job per request; no persistence.
 - The entire web UI is an inline HTML/JS string (`PAGE` at the bottom of `webapp.py`). Changing endpoints usually means editing that embedded JS too.
 
