@@ -1,0 +1,26 @@
+[project]
+name = "sarashina-client"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Satoshi Terasaki", email = "terasakisatoshi.math@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.143.2",
+    "markdown>=3.11.1",
+    "pymupdf>=1.28.2",
+    "python-dotenv>=1.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+chat = "sarashina_client.cli:main"
+translate = "sarashina_client.translate:main"
+pdftranslate = "sarashina_client.pdftranslate:main"
+sarashina-web = "sarashina_client.webapp:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
