@@ -88,6 +88,14 @@ http://127.0.0.1:8000 を開きます。
 | GET | `/api/paper/{job_id}` | 抽出した原文の HTML を返す |
 | POST | `/api/chat` | RAG 文脈つきで SSE ストリーミング回答（要インデックス構築） |
 
+## テスト
+
+```sh
+uv run pytest
+```
+
+`tests/` に pytest スイートがあります。**完全にオフライン**で動作し、HTTP は monkeypatch されるため API キーもネットワークも不要です（キャッシュは一時ディレクトリに退避）。対象は `cache` / `pdftranslate` / `rag` / `cli` / `translate` の単体ロジックと、`webapp` の各エンドポイント（`TestClient` 使用）。
+
 ## レート制限と注意
 
 Sarashina API はモデルごとに **1 分あたりのリクエスト数（RPM）** が制限されます。
@@ -116,4 +124,5 @@ src/sarashina_client/
   rag.py            # embedding / rerank / 検索（コサイン top-k）
   cache.py          # 索引のディスクキャッシュ（arXiv ID / URL 単位）
   webapp.py         # FastAPI アプリ（sarashina-web）
+tests/              # pytest スイート（オフライン / HTTP はモック）
 ```
