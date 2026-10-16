@@ -15,7 +15,7 @@ uv run sarashina-web              # = uvicorn on 127.0.0.1:8000
 uv run uvicorn sarashina_client.webapp:app --reload   # dev server
 ```
 
-- **Tests: `uv run pytest`** (`tests/`, pytest + httpx dev deps). They are fully offline: HTTP is monkeypatched, no API key is needed, and the cache is redirected to a tmp dir. There is still **no linter, no typechecker, and no CI** — do not invent `ruff`/`mypy`/CI commands.
+- **Tests: `uv run pytest`** (`tests/`, pytest + httpx dev deps). They are fully offline: HTTP is monkeypatched, no API key is needed, and the cache is redirected to a tmp dir. CI (`.github/workflows/test.yml`) runs this on push to `main` and on PRs. There is still **no linter and no typechecker** — do not invent `ruff`/`mypy` commands.
 - `.env` lives at the **project root** and is loaded cwd-relative (`load_dotenv(".env")` in each `main`). It holds a real `SARASHINA_API_KEY`, is gitignored, and must **never be overwritten/truncated** (a previous `> .env` destroyed the user's key).
 
 ## Conventions / gotchas
